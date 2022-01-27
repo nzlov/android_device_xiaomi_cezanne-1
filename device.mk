@@ -167,3 +167,19 @@ PRODUCT_PACKAGES += \
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/privapp-permissions-wfd.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/privapp-permissions-wfd.xml
+
+# LiveDisplay native
+PRODUCT_PACKAGES += \
+    vendor.lineage.livedisplay*
+
+# Touch
+PRODUCT_PACKAGES += \
+    vendor.lineage.touch*
+
+# Trust HAL
+PRODUCT_PACKAGES += \
+    vendor.lineage.trust*
+    
+# FOD   
+PRODUCT_COPY_FILES += \
+    vendor/lineage/config/permissions/vendor.lineage.biometrics.fingerprint.inscreen.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/vendor.lineage.biometrics.fingerprint.inscreen.xml
