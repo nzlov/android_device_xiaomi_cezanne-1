@@ -160,3 +160,7 @@ BOARD_VNDK_VERSION := current
 
 # Inherit from the proprietary version
 include vendor/xiaomi/cezanne/BoardConfigVendor.mk
+
+# Lineage Hardware
+BOARD_HARDWARE_CLASS += \
+$(VENDOR_PATH)/lineagehw
