@@ -49,7 +49,7 @@ BOARD_KERNEL_IMAGE_NAME := Image.gz-dtb
 BOARD_INCLUDE_DTB_IN_BOOTIMG := true
 
 TARGET_KERNEL_CLANG_COMPILE := true
-TARGET_KERNEL_SOURCE := kernel/redmi/mt6885
+TARGET_KERNEL_SOURCE := kernel/xiaomi/cezanne
 TARGET_KERNEL_CONFIG := vendor/cezanne_user_defconfig
 
 BOARD_KERNEL_SEPARATED_DTBO := false
