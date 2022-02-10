@@ -10,12 +10,12 @@
   {
     "repository" : "PixelExperience/vendor_mediatek-opensource",
     "target_path": "vendor/mediatek/opensource",
-    "branch"     : "eleven"
+    "branch"     : "twelve"
   },
   {
     "repository" : "PixelExperience/vendor_mediatek_interfaces",
     "target_path": "vendor/mediatek/interfaces",
-    "branch"     : "eleven"
+    "branch"     : "twelve"
   },
 ]
 
