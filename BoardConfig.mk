@@ -138,9 +138,7 @@ TARGET_USES_MKE2FS := true
 TARGET_RELEASETOOLS_EXTENSIONS := $(DEVICE_PATH)
 
 # Sepolicy
-include device/qcom/sepolicy/SEPolicy.mk
-
-BOARD_PLAT_PRIVATE_SEPOLICY_DIR += $(DEVICE_PATH)/sepolicy/private
+BOARD_SEPOLICY_DIR += $(DEVICE_PATH)/sepolicy-minimal
 
 # Telephony
 TARGET_PROVIDES_QTI_TELEPHONY_JAR := true
