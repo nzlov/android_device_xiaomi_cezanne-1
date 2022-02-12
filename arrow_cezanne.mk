@@ -11,16 +11,16 @@ $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 # Inherit from cezanne device
 $(call inherit-product, device/xiaomi/cezanne/device.mk)
 
-# Inherit some common Arrow stuff.
-$(call inherit-product, vendor/arrow/config/common.mk)
+# Inherit some common pe stuff.
+$(call inherit-product, vendor/aosp/config/common-full-phone.mk)
 
 # Device identifier. This must come after all inclusions.
-PRODUCT_NAME := arrow_cezanne
+PRODUCT_NAME := aosp_cezanne
 PRODUCT_DEVICE := cezanne
 PRODUCT_BRAND := Redmi
 PRODUCT_MODEL := M2006J10C
 PRODUCT_MANUFACTURER := Xiaomi
-DEVICE_MAINTAINER := Xayah
+DEVICE_MAINTAINER := ZhcnPanda
 
 PRODUCT_CHARACTERISTICS := nosdcard
 
