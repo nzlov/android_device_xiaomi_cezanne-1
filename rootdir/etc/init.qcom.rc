@@ -1,4 +1,5 @@
 import /system/etc/init/init.safailnet.rc
+import /vendor/etc/init/hw/init.mtkincalladj.rc
 
 service citsensor-hal-1-1 /vendor/bin/hw/vendor.xiaomi.hardware.citsensorservice@1.1-service
     override

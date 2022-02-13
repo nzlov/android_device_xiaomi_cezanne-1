@@ -49,10 +49,11 @@ PRODUCT_USE_DYNAMIC_PARTITIONS := true
 PRODUCT_BUILD_SUPER_PARTITION := false
 
 # Audio
+# Audio
 PRODUCT_PACKAGES += \
     audio.a2dp.default \
-    libaacwrapper
-
+    libaacwrapper \
+    tinymix
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/audio_policy_configuration.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/audio_policy_configuration.xml
 
@@ -136,7 +137,9 @@ PRODUCT_PACKAGES += \
     init.qcom.post_boot.sh \
     init.qcom.rc \
     init.recovery.qcom.rc \
-    init.safailnet.rc
+    init.safailnet.rc \
+    setup_MTK_In-Call_volume_adjust.sh \
+    init.mtkincalladj.rc
 
 # Telephony
 PRODUCT_PACKAGES += \

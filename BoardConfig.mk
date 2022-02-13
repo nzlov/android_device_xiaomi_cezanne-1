@@ -49,6 +49,7 @@ BOARD_KERNEL_IMAGE_NAME := Image.gz-dtb
 BOARD_INCLUDE_DTB_IN_BOOTIMG := true
 
 TARGET_KERNEL_CLANG_COMPILE := true
+TARGET_KERNEL_CLANG_VERSION := r383902
 TARGET_KERNEL_SOURCE := kernel/xiaomi/cezanne
 TARGET_KERNEL_CONFIG := vendor/cezanne_user_defconfig
 
@@ -155,6 +156,9 @@ BOARD_AVB_RECOVERY_ROLLBACK_INDEX_LOCATION := 1
 
 # Inherit from the proprietary version
 include vendor/xiaomi/cezanne/BoardConfigVendor.mk
+
+# Properties
+TARGET_SYSTEM_PROP += $(DEVICE_PATH)/configs/props/system.prop
 
 # Broken rules
 BUILD_BROKEN_DUP_RULES := true
