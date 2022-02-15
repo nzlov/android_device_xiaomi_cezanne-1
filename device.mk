@@ -21,14 +21,16 @@ include $(LOCAL_PATH)/properties.mk
 PRODUCT_COMPATIBLE_PROPERTY_OVERRIDE := true
 
 # Overlays
-DEVICE_PACKAGE_OVERLAYS += \
-    $(LOCAL_PATH)/overlay-aosp
-
-# Overlays -- Override vendor ones
 PRODUCT_PACKAGES += \
+    FrameworkResOverlay \
     FrameworksResTarget \
     DevicesOverlay \
-    DevicesAndroidOverlay
+    DevicesAndroidOverlay \
+    TetheringConfigOverlay \
+    WifiResCommon \
+    SettingsOverlay \
+    SystemUIOverlay \
+    FaceUnlockService
 
 # Soong namespaces
 PRODUCT_SOONG_NAMESPACES += \
@@ -156,11 +158,6 @@ PRODUCT_BOOT_JARS += \
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/privapp-permissions-qti.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/permissions/privapp-permissions-qti.xml
-
-# WiFi
-PRODUCT_PACKAGES += \
-    TetheringConfigOverlay \
-    WifiResCommon
 
 # WiFi Display
 PRODUCT_PACKAGES += \
