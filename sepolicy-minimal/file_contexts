@@ -3,6 +3,3 @@
 /dsp(/.*)?               u:object_r:adsprpcd_file:s0
 /firmware(/.*)?          u:object_r:firmware_file:s0
 /persist(/.*)?           u:object_r:persist_file:s0
-
-# Vibrator
-/vendor/bin/hw/android\.hardware\.vibrator-service\.cezanne     u:object_r:hal_vibrator_default_exec:s0
