@@ -14,10 +14,10 @@
 // limitations under the License.
 
 cc_binary {
-    name: "android.hardware.biometrics.fingerprint@2.3-service",
+    name: "android.hardware.biometrics.fingerprint@2.3-service.xiaomi_cezanne",
     relative_install_path: "hw",
     vintf_fragments: ["android.hardware.biometrics.fingerprint@2.3-service.xml"],
-    init_rc: ["android.hardware.biometrics.fingerprint@2.3-service.rc"],
+    init_rc: ["android.hardware.biometrics.fingerprint@2.3-service.xiaomi_cezanne.rc"],
     defaults: ["hidl_defaults"],
     srcs: [
         "service.cpp",
@@ -26,19 +26,27 @@ cc_binary {
     shared_libs: [
         "libbase",
         "libhidlbase",
+        "libhardware",
+        "libhardware_legacy",
         "liblog",
         "libutils",
         "android.hardware.biometrics.fingerprint@2.1",
         "android.hardware.biometrics.fingerprint@2.2",
         "android.hardware.biometrics.fingerprint@2.3",
+        "vendor.goodix.hardware.biometrics.fingerprint@2.1",
         "vendor.xiaomi.hardware.fingerprintextension@1.0",
+        "vendor.xiaomi.hardware.touchfeature@1.0",
+        "vendor.xiaomi.hardware.displayfeature@1.0",
     ],
 }
 
 cc_library_static {
-    name: "libudfps_extension.kona",
+    name: "libudfps_extension.xiaomi_cezanne",
     srcs: ["UdfpsExtension.cpp"],
     include_dirs: [
         "frameworks/native/services/surfaceflinger/CompositionEngine/include"
     ],
-}
+    header_libs: [
+        "generated_kernel_headers",
+    ],
+} 
