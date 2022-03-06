@@ -25,9 +25,9 @@ cc_binary {
     ],
     shared_libs: [
         "libbase",
-        "libhidlbase",
         "libhardware",
         "libhardware_legacy",
+        "libhidlbase",
         "liblog",
         "libutils",
         "android.hardware.biometrics.fingerprint@2.1",
@@ -49,4 +49,4 @@ cc_library_static {
     header_libs: [
         "generated_kernel_headers",
     ],
-} 
+}
