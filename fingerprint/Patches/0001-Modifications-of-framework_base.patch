@@ -1,0 +1,541 @@
+From 34fef277be8262915225558105fc4082ea1991cb Mon Sep 17 00:00:00 2001
+From: AngelaCooljx <ljx15007902367@gmail.com>
+Date: Mon, 7 Mar 2022 16:08:21 +0800
+Subject: [PATCH] Modifications of  framework_base
+
+Change-Id: I42fcb53fc2648829101eb5ead3aad19816332202
+---
+ core/java/android/provider/Settings.java      |   8 ++
+ .../settings/backup/SystemSettings.java       |   1 +
+ .../validators/SystemSettingsValidators.java  |   1 +
+ .../systemui/biometrics/UdfpsController.java  | 104 ++++++++++++------
+ .../sensors/fingerprint/UdfpsHelper.java      |  53 ++++++++-
+ .../hidl/FingerprintAuthenticationClient.java |  12 +-
+ .../hidl/FingerprintDetectClient.java         |   6 +-
+ .../hidl/FingerprintEnrollClient.java         |  10 +-
+ .../sensors/fingerprint/hidl/TestHal.java     |   6 +
+ 9 files changed, 154 insertions(+), 47 deletions(-)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 0556cb6d..cb7cd83b 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -5198,6 +5198,14 @@ public final class Settings {
+         @Readable
+         public static final String MULTI_AUDIO_FOCUS_ENABLED = "multi_audio_focus_enabled";
+ 
++	/**
++         * Enable fod detection even when screen is off
++         * Default value is 0
++         * @hide
++         */
++        @Readable
++        public static final String SCREEN_OFF_FOD = "screen_off_fod";
++
+         /**
+          * Whether the button backlight is only lit when pressed (and not when screen is touched)
+          * The value is boolean (1 or 0).
+diff --git a/packages/SettingsProvider/src/android/provider/settings/backup/SystemSettings.java b/packages/SettingsProvider/src/android/provider/settings/backup/SystemSettings.java
+index 0fe4efef..3861046d 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/backup/SystemSettings.java
++++ b/packages/SettingsProvider/src/android/provider/settings/backup/SystemSettings.java
+@@ -84,5 +84,6 @@ public class SystemSettings {
+         Settings.System.DISPLAY_COLOR_MODE,
+         Settings.System.ALARM_ALERT,
+         Settings.System.NOTIFICATION_LIGHT_PULSE,
++        Settings.System.SCREEN_OFF_FOD,
+     };
+ }
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
+index 95fd3576..4db824ae 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
+@@ -169,6 +169,7 @@ public class SystemSettingsValidators {
+         VALIDATORS.put(System.HEARING_AID, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(System.TTY_MODE, new InclusiveIntegerRangeValidator(0, 3));
+         VALIDATORS.put(System.NOTIFICATION_LIGHT_PULSE, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(System.SCREEN_OFF_FOD, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(System.POINTER_LOCATION, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(System.SHOW_TOUCHES, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(System.WINDOW_ORIENTATION_LISTENER_LOG, BOOLEAN_VALIDATOR);
+diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/UdfpsController.java b/packages/SystemUI/src/com/android/systemui/biometrics/UdfpsController.java
+index e2b3d9fd..fca05b61 100644
+--- a/packages/SystemUI/src/com/android/systemui/biometrics/UdfpsController.java
++++ b/packages/SystemUI/src/com/android/systemui/biometrics/UdfpsController.java
+@@ -29,6 +29,7 @@ import android.content.BroadcastReceiver;
+ import android.content.Context;
+ import android.content.Intent;
+ import android.content.IntentFilter;
++import android.database.ContentObserver;
+ import android.graphics.PixelFormat;
+ import android.graphics.Point;
+ import android.graphics.RectF;
+@@ -38,14 +39,16 @@ import android.hardware.fingerprint.FingerprintSensorPropertiesInternal;
+ import android.hardware.fingerprint.IUdfpsOverlayController;
+ import android.hardware.fingerprint.IUdfpsOverlayControllerCallback;
+ import android.media.AudioAttributes;
++import android.net.Uri;
+ import android.os.Handler;
+ import android.os.PowerManager;
+ import android.os.Process;
+ import android.os.RemoteException;
+ import android.os.Trace;
++import android.os.UserHandle;
+ import android.os.VibrationEffect;
+ import android.os.Vibrator;
+-import android.os.UserHandle;
++import android.provider.Settings;
+ import android.util.Log;
+ import android.view.Gravity;
+ import android.view.LayoutInflater;
+@@ -77,6 +80,7 @@ import com.android.systemui.statusbar.policy.KeyguardStateController;
+ import com.android.systemui.util.concurrency.DelayableExecutor;
+ import com.android.systemui.util.concurrency.Execution;
+ import com.android.systemui.util.time.SystemClock;
++import com.android.systemui.util.settings.SystemSettings;
+ 
+ import java.util.HashSet;
+ import java.util.Optional;
+@@ -101,7 +105,6 @@ import kotlin.Unit;
+ @SysUISingleton
+ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+     private static final String TAG = "UdfpsController";
+-    private static final String PULSE_ACTION = "com.android.systemui.doze.pulse";
+     private static final long AOD_INTERRUPT_TIMEOUT_MILLIS = 1000;
+ 
+     // Minimum required delay between consecutive touch logs in milliseconds.
+@@ -141,6 +144,8 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+     @Nullable private VelocityTracker mVelocityTracker;
+     // The ID of the pointer for which ACTION_DOWN has occurred. -1 means no pointer is active.
+     private int mActivePointerId = -1;
++    private static final int maxBrightness = 255, defBrightness = 100;
++    private static int brightness;
+     // The timestamp of the most recent touch log.
+     private long mTouchLogTime;
+     // Sensor has a good capture for this touch. Do not need to illuminate for this particular
+@@ -163,9 +168,12 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+     private Runnable mAodInterruptRunnable;
+     private boolean mOnFingerDown;
+     private boolean mAttemptedToDismissKeyguard;
+-    private final int mUdfpsVendorCode;
+     private Set<Callback> mCallbacks = new HashSet<>();
+ 
++    private final int mUdfpsVendorCode;
++    private final SystemSettings mSystemSettings;
++    private boolean mScreenOffFod;
++
+     @VisibleForTesting
+     public static final AudioAttributes VIBRATION_SONIFICATION_ATTRIBUTES =
+             new AudioAttributes.Builder()
+@@ -219,12 +227,14 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+         }
+ 
+         void onAcquiredGood() {
++            Log.d(TAG, "onAcquiredGood");
+             if (mEnrollHelper != null) {
+                 mEnrollHelper.animateIfLastStep();
+             }
+         }
+ 
+         void onEnrollmentHelp() {
++            Log.d(TAG, "onEnrollmentHelp");
+             if (mEnrollHelper != null) {
+                 mEnrollHelper.onEnrollmentHelp();
+             }
+@@ -316,16 +326,13 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+         @Override
+         public void onAcquired(int sensorId, int acquiredInfo, int vendorCode) {
+             mFgExecutor.execute(() -> {
+-                if (acquiredInfo == 6 && (mStatusBarStateController.isDozing() || !mScreenOn)) {
+-                    if (vendorCode == mUdfpsVendorCode) {
+-                        if (mContext.getResources().getBoolean(R.bool.config_pulseOnFingerDown)) {
+-                            mContext.sendBroadcastAsUser(new Intent(PULSE_ACTION),
+-                                    new UserHandle(UserHandle.USER_CURRENT));
+-                        } else {
+-                            mPowerManager.wakeUp(mSystemClock.uptimeMillis(),
+-                                    PowerManager.WAKE_REASON_GESTURE, TAG);
+-                        }
+-                        onAodInterrupt(0, 0, 0, 0); // To-Do pass proper values
++                final boolean isDozing = mStatusBarStateController.isDozing() || !mScreenOn;
++                if (acquiredInfo == 6 && vendorCode == mUdfpsVendorCode) {
++                    if ((mScreenOffFod && isDozing) /** Screen off and dozing */ ||
++                            (mKeyguardUpdateMonitor.isDreaming() && mScreenOn) /** AOD or pulse */) {
++                        mPowerManager.wakeUp(mSystemClock.uptimeMillis(),
++                                PowerManager.WAKE_REASON_GESTURE, TAG);
++                        onAodInterrupt(0, 0, 0, 0);
+                     }
+                 }
+             });
+@@ -558,12 +565,13 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+             @Main Handler mainHandler,
+             @NonNull ConfigurationController configurationController,
+             @NonNull SystemClock systemClock,
++            @NonNull SystemSettings systemSettings,
+             @NonNull UnlockedScreenOffAnimationController unlockedScreenOffAnimationController) {
+         mContext = context;
+         mExecution = execution;
+         // TODO (b/185124905): inject main handler and vibrator once done prototyping
+-        mMainHandler = mainHandler;
+         mVibrator = vibrator;
++        mMainHandler = mainHandler;
+         mInflater = inflater;
+         // The fingerprint manager is queried for UDFPS before this class is constructed, so the
+         // fingerprint manager should never be null.
+@@ -618,9 +626,23 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+         context.registerReceiver(mBroadcastReceiver, filter);
+ 
+         udfpsHapticsSimulator.setUdfpsController(this);
+-
+         mUdfpsVendorCode = mContext.getResources().getInteger(R.integer.config_udfps_vendor_code);
++        mSystemSettings = systemSettings;
++        updateScreenOffFodState();
++        mSystemSettings.registerContentObserver(Settings.System.SCREEN_OFF_FOD,
++            new ContentObserver(mMainHandler) {
++                @Override
++                public void onChange(boolean selfChange, Uri uri) {
++                    if (uri.getLastPathSegment().equals(Settings.System.SCREEN_OFF_FOD)) {
++                        updateScreenOffFodState();
++                    }
++                }
++            }
++        );
++    }
+ 
++    private void updateScreenOffFodState() {
++        mScreenOffFod = mSystemSettings.getInt(Settings.System.SCREEN_OFF_FOD, 1) == 1;
+     }
+ 
+     /**
+@@ -642,7 +664,8 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+         return WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                 | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                 | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+-                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
++                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
++                | WindowManager.LayoutParams.FLAG_DIM_BEHIND;
+     }
+ 
+     @Nullable
+@@ -755,6 +778,23 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+         }
+         // avoid announcing window title
+         mCoreLayoutParams.accessibilityTitle = " ";
++        brightness = Settings.System.getInt(mContext.getContentResolver(),
++                            Settings.System.SCREEN_BRIGHTNESS, defBrightness);
++        Settings.System.putInt(mContext.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, 0);                    
++        
++        double dim;
++        if (brightness >= 62) {
++            dim = 1.0 - Math.pow(brightness / 255.0 * 430.0 / 600.0, 0.485);
++        } else if (brightness < 62 && brightness >=31) {
++            dim = 1.0 - Math.pow(brightness / 255.0 * 430.0 / 600.0, 0.530);
++        } else if (brightness > 7) {
++            dim = 1.0 - Math.pow(brightness / 209.0, 0.525);
++        }else{
++            dim = 1.0 - Math.pow(brightness / 209.0, 0.475);
++        }
++        mCoreLayoutParams.dimAmount = (float) dim;
++        mCoreLayoutParams.screenBrightness = 1.0f;
++        Settings.System.putInt(mContext.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, maxBrightness);
+         return mCoreLayoutParams;
+     }
+ 
+@@ -1038,21 +1078,6 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+         }
+     }
+ 
+-    /**
+-     * Callback for fingerUp and fingerDown events.
+-     */
+-    public interface Callback {
+-        /**
+-         * Called onFingerUp events. Will only be called if the finger was previously down.
+-         */
+-        void onFingerUp();
+-
+-        /**
+-         * Called onFingerDown events.
+-         */
+-        void onFingerDown();
+-    }
+-
+     @Override
+     public void enableHbm(@HbmType int hbmType, @Nullable Surface surface,
+             @Nullable Runnable onHbmEnabled) {
+@@ -1069,4 +1094,19 @@ public class UdfpsController implements DozeReceiver, UdfpsHbmProvider {
+             mMainHandler.post(onHbmDisabled);
+         }
+     }
+-}
++
++    /**
++     * Callback for fingerUp and fingerDown events.
++     */
++    public interface Callback {
++        /**
++         * Called onFingerUp events. Will only be called if the finger was previously down.
++         */
++        void onFingerUp();
++
++        /**
++         * Called onFingerDown events.
++         */
++        void onFingerDown();
++    }
++}
+\ No newline at end of file
+diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/UdfpsHelper.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/UdfpsHelper.java
+index 879c8a03..b2e4bace 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/UdfpsHelper.java
++++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/UdfpsHelper.java
+@@ -19,6 +19,7 @@ package com.android.server.biometrics.sensors.fingerprint;
+ import android.annotation.NonNull;
+ import android.annotation.Nullable;
+ import android.content.Context;
++import android.provider.Settings;
+ import android.hardware.biometrics.fingerprint.V2_1.IBiometricsFingerprint;
+ import android.hardware.fingerprint.FingerprintManager;
+ import android.hardware.fingerprint.IUdfpsOverlayController;
+@@ -34,6 +35,8 @@ import com.android.server.biometrics.sensors.AcquisitionClient;
+ public class UdfpsHelper {
+ 
+     private static final String TAG = "UdfpsHelper";
++    private static final int defBrightness = 100;
++    private static int brightness;
+ 
+     public static void onFingerDown(IBiometricsFingerprint daemon, int x, int y, float minor,
+             float major) {
+@@ -82,10 +85,19 @@ public class UdfpsHelper {
+     public static void showUdfpsOverlay(int sensorId, int reason,
+             @Nullable IUdfpsOverlayController udfpsOverlayController,
+             @NonNull AcquisitionClient<?> client) {
++        showUdfpsOverlay(null, sensorId, reason, udfpsOverlayController, client);
++    }
++
++    public static void showUdfpsOverlay(IBiometricsFingerprint daemon,
++            int sensorId, int reason,
++            @Nullable IUdfpsOverlayController udfpsOverlayController,
++            @NonNull AcquisitionClient<?> client) {
+         if (udfpsOverlayController == null) {
+             return;
+         }
+-
++        brightness = Settings.System.getInt(client.getContext().getContentResolver(), Settings.System.SCREEN_BRIGHTNESS,defBrightness);
++        if (Settings.System.getInt(client.getContext().getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE,1) == 0) 
++            brightness += 100000;
+         final IUdfpsOverlayControllerCallback callback =
+                 new IUdfpsOverlayControllerCallback.Stub() {
+                     @Override
+@@ -94,6 +106,23 @@ public class UdfpsHelper {
+                     }
+                 };
+ 
++        if (daemon != null) {
++            android.hardware.biometrics.fingerprint.V2_3.IBiometricsFingerprint extension =
++                android.hardware.biometrics.fingerprint.V2_3.IBiometricsFingerprint.castFrom(
++                daemon);
++            if (extension != null) {
++                try {
++                    extension.onShowUdfpsOverlay(brightness);
++                } catch (RemoteException e) {
++                    Slog.v(TAG, "showUdfpsOverlay | RemoteException: ", e);
++                }
++            } else {
++                Slog.v(TAG, "onShowUdfpsOverlay | failed to cast the HIDL to V2_3");
++            }
++        } else {
++             Slog.v(TAG, "onShowUdfpsOverlay | daemon null");
++        }
++
+         try {
+             udfpsOverlayController.showUdfpsOverlay(sensorId, reason, callback);
+         } catch (RemoteException e) {
+@@ -103,9 +132,31 @@ public class UdfpsHelper {
+ 
+     public static void hideUdfpsOverlay(int sensorId,
+             @Nullable IUdfpsOverlayController udfpsOverlayController) {
++        hideUdfpsOverlay(null, sensorId, udfpsOverlayController);
++    }
++
++    public static void hideUdfpsOverlay(IBiometricsFingerprint daemon, int sensorId,
++            @Nullable IUdfpsOverlayController udfpsOverlayController) {
+         if (udfpsOverlayController == null) {
+             return;
+         }
++        if (daemon != null) {
++            android.hardware.biometrics.fingerprint.V2_3.IBiometricsFingerprint extension =
++                android.hardware.biometrics.fingerprint.V2_3.IBiometricsFingerprint.castFrom(
++                daemon);
++            if (extension != null) {
++                try {
++                    extension.onHideUdfpsOverlay();
++                } catch (RemoteException e) {
++                    Slog.v(TAG, "hideUdfpsOverlay | RemoteException: ", e);
++                }
++            } else {
++                Slog.v(TAG, "onHideUdfpsOverlay | failed to cast the HIDL to V2_3");
++            }
++        } else {
++            Slog.v(TAG, "onHideUdfpsOverlay | daemon null");
++        }
++
+         try {
+             udfpsOverlayController.hideUdfpsOverlay(sensorId);
+         } catch (RemoteException e) {
+diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintAuthenticationClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintAuthenticationClient.java
+index 87c2910c..d9e8442d 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintAuthenticationClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintAuthenticationClient.java
+@@ -121,7 +121,7 @@ class FingerprintAuthenticationClient extends AuthenticationClient<IBiometricsFi
+         if (authenticated) {
+             mState = STATE_STOPPED;
+             resetFailedAttempts(getTargetUserId());
+-            UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++            UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+         } else {
+             mState = STATE_STARTED_PAUSED_ATTEMPTED;
+             final @LockoutTracker.LockoutMode int lockoutMode =
+@@ -134,7 +134,7 @@ class FingerprintAuthenticationClient extends AuthenticationClient<IBiometricsFi
+                 // Send the error, but do not invoke the FinishCallback yet. Since lockout is not
+                 // controlled by the HAL, the framework must stop the sensor before finishing the
+                 // client.
+-                UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++                UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+                 onErrorInternal(errorCode, 0 /* vendorCode */, false /* finish */);
+                 cancel();
+             }
+@@ -149,7 +149,7 @@ class FingerprintAuthenticationClient extends AuthenticationClient<IBiometricsFi
+             BiometricNotificationUtils.showBadCalibrationNotification(getContext());
+         }
+ 
+-        UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++        UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+     }
+ 
+     private void resetFailedAttempts(int userId) {
+@@ -177,7 +177,7 @@ class FingerprintAuthenticationClient extends AuthenticationClient<IBiometricsFi
+ 
+     @Override
+     protected void startHalOperation() {
+-        UdfpsHelper.showUdfpsOverlay(getSensorId(), Utils.getUdfpsAuthReason(this),
++        UdfpsHelper.showUdfpsOverlay(getFreshDaemon(), getSensorId(), Utils.getUdfpsAuthReason(this),
+                 mUdfpsOverlayController, this);
+         try {
+             // GroupId was never used. In fact, groupId is always the same as userId.
+@@ -186,14 +186,14 @@ class FingerprintAuthenticationClient extends AuthenticationClient<IBiometricsFi
+             Slog.e(TAG, "Remote exception when requesting auth", e);
+             onError(BiometricFingerprintConstants.FINGERPRINT_ERROR_HW_UNAVAILABLE,
+                     0 /* vendorCode */);
+-            UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++            UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+             mCallback.onClientFinished(this, false /* success */);
+         }
+     }
+ 
+     @Override
+     protected void stopHalOperation() {
+-        UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++        UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+         try {
+             getFreshDaemon().cancel();
+         } catch (RemoteException e) {
+diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintDetectClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintDetectClient.java
+index 147a2069..d073ef48 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintDetectClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintDetectClient.java
+@@ -67,7 +67,7 @@ class FingerprintDetectClient extends AcquisitionClient<IBiometricsFingerprint>
+ 
+     @Override
+     protected void stopHalOperation() {
+-        UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++        UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+         try {
+             getFreshDaemon().cancel();
+         } catch (RemoteException e) {
+@@ -86,7 +86,7 @@ class FingerprintDetectClient extends AcquisitionClient<IBiometricsFingerprint>
+ 
+     @Override
+     protected void startHalOperation() {
+-        UdfpsHelper.showUdfpsOverlay(getSensorId(),
++        UdfpsHelper.showUdfpsOverlay(getFreshDaemon(), getSensorId(),
+                 IUdfpsOverlayController.REASON_AUTH_FPM_KEYGUARD,
+                 mUdfpsOverlayController, this);
+         try {
+@@ -95,7 +95,7 @@ class FingerprintDetectClient extends AcquisitionClient<IBiometricsFingerprint>
+             Slog.e(TAG, "Remote exception when requesting auth", e);
+             onError(BiometricFingerprintConstants.FINGERPRINT_ERROR_HW_UNAVAILABLE,
+                     0 /* vendorCode */);
+-            UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++            UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+             mCallback.onClientFinished(this, false /* success */);
+         }
+     }
+diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintEnrollClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintEnrollClient.java
+index dc705346..6d423bfe 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintEnrollClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintEnrollClient.java
+@@ -95,7 +95,7 @@ public class FingerprintEnrollClient extends EnrollClient<IBiometricsFingerprint
+ 
+     @Override
+     protected void startHalOperation() {
+-        UdfpsHelper.showUdfpsOverlay(getSensorId(),
++        UdfpsHelper.showUdfpsOverlay(getFreshDaemon(), getSensorId(),
+                 UdfpsHelper.getReasonFromEnrollReason(mEnrollReason),
+                 mUdfpsOverlayController, this);
+         SidefpsHelper.showOverlay(mSidefpsController);
+@@ -107,7 +107,7 @@ public class FingerprintEnrollClient extends EnrollClient<IBiometricsFingerprint
+             Slog.e(TAG, "Remote exception when requesting enroll", e);
+             onError(BiometricFingerprintConstants.FINGERPRINT_ERROR_HW_UNAVAILABLE,
+                     0 /* vendorCode */);
+-            UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++            UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+             SidefpsHelper.hideOverlay(mSidefpsController);
+             mCallback.onClientFinished(this, false /* success */);
+         }
+@@ -115,7 +115,7 @@ public class FingerprintEnrollClient extends EnrollClient<IBiometricsFingerprint
+ 
+     @Override
+     protected void stopHalOperation() {
+-        UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++        UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+         SidefpsHelper.hideOverlay(mSidefpsController);
+         try {
+             getFreshDaemon().cancel();
+@@ -134,7 +134,7 @@ public class FingerprintEnrollClient extends EnrollClient<IBiometricsFingerprint
+         UdfpsHelper.onEnrollmentProgress(getSensorId(), remaining, mUdfpsOverlayController);
+ 
+         if (remaining == 0) {
+-            UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++            UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+             SidefpsHelper.hideOverlay(mSidefpsController);
+         }
+     }
+@@ -152,7 +152,7 @@ public class FingerprintEnrollClient extends EnrollClient<IBiometricsFingerprint
+     public void onError(int errorCode, int vendorCode) {
+         super.onError(errorCode, vendorCode);
+ 
+-        UdfpsHelper.hideUdfpsOverlay(getSensorId(), mUdfpsOverlayController);
++        UdfpsHelper.hideUdfpsOverlay(getFreshDaemon(), getSensorId(), mUdfpsOverlayController);
+         SidefpsHelper.hideOverlay(mSidefpsController);
+     }
+ 
+diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/TestHal.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/TestHal.java
+index 986e92e2..b60f2b6b 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/TestHal.java
++++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/TestHal.java
+@@ -63,6 +63,12 @@ public class TestHal extends IBiometricsFingerprint.Stub {
+ 
+     }
+ 
++    @Override
++    public void onShowUdfpsOverlay(int curbrightness) {}
++
++    @Override
++    public void onHideUdfpsOverlay() {}
++
+     @Override
+     public long setNotify(IBiometricsFingerprintClientCallback clientCallback) {
+         mCallback = clientCallback;
+-- 
+2.32.0
+

@@ -1,0 +1,45 @@
+From 72b05621cd104bbcea4cd1e20400a752447b3815 Mon Sep 17 00:00:00 2001
+From: AngelaCooljx <ljx15007902367@gmail.com>
+Date: Mon, 7 Mar 2022 16:09:01 +0800
+Subject: [PATCH] Modifications of hardware_interfaces
+
+Change-Id: I8e8c84b3ea6ca994afa1a325cb3d9351d9a8f779
+---
+ biometrics/fingerprint/2.3/IBiometricsFingerprint.hal | 10 ++++++++++
+ current.txt                                           |  3 +++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/biometrics/fingerprint/2.3/IBiometricsFingerprint.hal b/biometrics/fingerprint/2.3/IBiometricsFingerprint.hal
+index 378b564..87bf4e1 100644
+--- a/biometrics/fingerprint/2.3/IBiometricsFingerprint.hal
++++ b/biometrics/fingerprint/2.3/IBiometricsFingerprint.hal
+@@ -67,4 +67,14 @@ interface IBiometricsFingerprint extends @2.2::IBiometricsFingerprint {
+      * previously caused a "finger down" event will be reported.
+      */
+     onFingerUp();
++
++    /**
++     * Called when an Udfps overlay is shown
++     */
++    onShowUdfpsOverlay(uint32_t curbrightness);
++
++    /**
++     * Called when an Udfps overlay is hidden
++     */
++    onHideUdfpsOverlay();
+ };
+diff --git a/current.txt b/current.txt
+index 3893d07..6247e81 100644
+--- a/current.txt
++++ b/current.txt
+@@ -901,4 +901,7 @@ c8a57364f6ad20842be14f4db284df5304f7521ca8eac6bcc1fa6c5b466fb8a6 android.hardwar
+ 4a087a308608d146b022ebc15633de989f5f4dfe1491a83fa41763290a82e40d android.hardware.automotive.vehicle@2.0::types
+ 70eb14415391f835fb218b43a1e25f5d6495f098f96fa2acaea70985e98e1ce8 android.hardware.automotive.vehicle@2.0::types
+ 
++# Modified
++49ad6f6aed77e147b384a195a4df19de0b073e932b3ee0729104eb229344e301 android.hardware.biometrics.fingerprint@2.3::IBiometricsFingerprint
++
+ # There should be no more HIDL HALs - please use AIDL instead.
+-- 
+2.32.0
+
