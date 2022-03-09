@@ -64,16 +64,6 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     libldacBT_dec
 
-
-# Camera
-#ifeq ($(AOSP_GAPPS), true)
-#PRODUCT_PACKAGES += \
-#    GCamGOPrebuilt
-#else
-#PRODUCT_PACKAGES += \
-#    Snap
-#endif
-
 # Camera
 PRODUCT_PACKAGES += \
     CameraGo
@@ -87,15 +77,13 @@ PRODUCT_PACKAGES += \
 
 # Fingerprint
 PRODUCT_PACKAGES += \
-    android.hardware.biometrics.fingerprint@2.3-service.xiaomi_cezanne
+    android.hardware.biometrics.fingerprint@2.3-service.xiaomi_cezanne \
+    IFAAService  \
+    SoterService
 
 # Fstab
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/etc/fstab.mt6885:$(TARGET_COPY_OUT_RAMDISK)/fstab.mt6885
-
-# Gboard
-PRODUCT_PACKAGES += \
-    Gboard
 
 # HIDL
 PRODUCT_PACKAGES += \
@@ -109,6 +97,35 @@ PRODUCT_COPY_FILES += \
 # IFAA manager
 PRODUCT_PACKAGES += \
     org.ifaa.android.manager
+
+PRODUCT_BOOT_JARS += \
+    org.ifaa.android.manager
+
+# IMS
+PRODUCT_PACKAGES += \
+	vendor.mediatek.hardware.mtkradioex@1.0 \
+	vendor.mediatek.hardware.videotelephony@1.0 \
+	ImsService \
+	EngineerMode \
+	libsink \
+	libem_support_jni \
+	mediatek-common \
+    mediatek-framework \
+    mediatek-ims-base \
+    mediatek-ims-common \
+    mediatek-telecom-common \
+    mediatek-telephony-base \
+    mediatek-telephony-common
+
+	
+PRODUCT_BOOT_JARS += \
+    mediatek-common \
+    mediatek-framework \
+    mediatek-ims-base \
+    mediatek-ims-common \
+    mediatek-telecom-common \
+    mediatek-telephony-base \
+    mediatek-telephony-common
 
 # Keylayout
 PRODUCT_COPY_FILES += \
@@ -137,27 +154,18 @@ PRODUCT_PACKAGES += \
 
 # Ramdisk
 PRODUCT_PACKAGES += \
-    init.qcom.post_boot.sh \
-    init.qcom.rc \
-    init.recovery.qcom.rc \
-    init.safailnet.rc \
-    init.mtkincalladj.rc
+    init.mt6885.rc \
+    init.mt6885.usb.rc \
+    fstab.mt6885 \
+    ueventd.mt6885.rc\
 
-# Telephony
+# RcsService
 PRODUCT_PACKAGES += \
-    ims-ext-common \
-    ims_ext_common.xml \
-    qti-telephony-hidl-wrapper \
-    qti_telephony_hidl_wrapper.xml \
-    qti-telephony-utils \
-    qti_telephony_utils.xml \
-    telephony-ext
-
-PRODUCT_BOOT_JARS += \
-    telephony-ext
+    RcsService
 
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/configs/privapp-permissions-qti.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/permissions/privapp-permissions-qti.xml
+    $(LOCAL_PATH)/configs/privapp-permissions-mediatek.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/privapp-permissions-mediatek.xml
+
 
 # WiFi Display
 PRODUCT_PACKAGES += \

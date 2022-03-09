@@ -8,10 +8,6 @@ endif
 PRODUCT_PRODUCT_PROPERTIES += \
     audio.offload.min.duration.secs=30
 
-# Camera
-PRODUCT_PRODUCT_PROPERTIES += \
-    vendor.camera.aux.packagelist=org.lineageos.snap,org.codeaurora.snapcam
-
 # Display
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     debug.sf.enable_hwc_vds=1 \
